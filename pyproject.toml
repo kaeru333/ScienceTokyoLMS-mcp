@@ -1,0 +1,52 @@
+[project]
+name = "science-tokyo-lms-mcp"
+version = "0.1.0"
+description = "東京科学大学 Science Tokyo LMS 用 MCP サーバ (講義資料DL・課題締切確認など)"
+readme = "README.md"
+authors = [
+    { name = "kaeru333", email = "153498244+kaeru333@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "playwright>=1.49.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "httpx>=0.28.0",
+    "keyring>=25.0.0",
+]
+
+[project.scripts]
+science-tokyo-lms-mcp = "science_tokyo_lms_mcp.server:main"
+science-tokyo-lms-login = "science_tokyo_lms_mcp.login:main"
+
+[build-system]
+requires = ["uv_build>=0.10.11,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.8.0",
+    "ty",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+# 全角句読点 (，．) を許容するため RUF001-003 は採用しない．
+# 和文 docstring の英語的フォーマット規則 (末尾ピリオド等) は無効化する．
+select = ["E", "F", "I", "N", "UP", "B", "ANN", "D"]
+# ANN401: JSON (Web Services 応答) を扱うため Any を許容する．
+ignore = ["D203", "D212", "D400", "D415", "D205", "ANN401"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "ANN"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

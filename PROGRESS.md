@@ -1,0 +1,38 @@
+# 行動ログ (PROGRESS)
+
+- [2026-06-22 22:07] 🚀 タスク「Science Tokyo LMS MCP サーバの雛形作成」を開始しました．
+- [2026-06-22 22:08] 🔧 `uv init --package` でプロジェクト土台を初期化しました．
+- [2026-06-22 22:10] 🔧 `pyproject.toml` を整備 (依存: mcp / playwright / pydantic 系，dev: ruff / ty / pytest)．
+- [2026-06-22 22:10] 🔧 `.gitignore`・`.env.example` を作成 (認証情報・cookie・資料を除外)．
+- [2026-06-22 22:12] 🔧 `config.py`・`models.py` を作成 (設定と不変データモデル)．
+- [2026-06-22 22:14] 🔧 `auth/session.py` で Playwright 永続セッション管理を実装．
+- [2026-06-22 22:16] 🔧 `client/` に LMS アクセス抽象 (base) とスタブ実装 (playwright_client) を作成．
+- [2026-06-22 22:18] 🔧 `tools/` に MCP ツール (courses/materials/deadlines/announcements) を作成．
+- [2026-06-22 22:19] 🔧 `server.py`・`login.py` を作成 (サーバ本体と初回ログイン CLI)．
+- [2026-06-22 22:20] 🔧 `tests/` に models・締切判定ロジックの単体テストを作成．
+- [2026-06-22 22:20] 🔧 `README.md` を作成 (方針・セットアップ・規約注意)．
+- [2026-06-22 22:22] ✅ `uv sync` 成功 (mcp 1.28.0 / playwright 1.60.0 / pydantic 2.13.4 等)．
+- [2026-06-22 22:23] ✅ `ruff format`・`ruff check`・`ty check` がすべてパス．
+- [2026-06-22 22:23] ✅ `pytest` 11 件パス．サーバ構築で 6 ツールの登録を確認．
+- [2026-06-22 22:24] 🏁 雛形作成を完了．次は LMS 基盤の特定とページ解析の実装．
+- [2026-06-22 22:30] 🔍 LMS 基盤を特定: host `lms.s.isct.ac.jp/2025/`，Moodle と確認．
+- [2026-06-22 22:31] 🔍 認証前エンドポイント検証: Web Services 有効，launch.php は Extic SSO へ．
+- [2026-06-22 22:34] 🔧 方式転換: Moodle Web Services API + モバイルトークン認証へ．
+- [2026-06-22 22:36] 🔧 `auth/token.py` (トークン取得・keyring 保管) と `client/moodle_client.py` を実装．
+- [2026-06-22 22:38] 🔧 `config.py`・`login.py`・`client/__init__.py`・README を更新 (keyring 追加)．
+- [2026-06-22 22:40] ✅ ruff/ty 通過，pytest 23 件通過，6 ツール登録を確認．
+- [2026-06-22 22:40] 🏁 Moodle API 方式の実装完了．次は実トークンでの疎通確認．
+- [2026-06-22 22:50] 🔧 keyring 非対応環境向けに `STLMS_TOKEN_BACKEND` (auto/keyring/file) を追加．
+- [2026-06-22 22:51] 🔧 `STLMS_BROWSER` (chromium/firefox/webkit) でブラウザを選択可能に．
+- [2026-06-22 22:52] 🔧 Firefox + ファイル保存を設定した `.env` を作成 (git 無視確認済み)．
+- [2026-06-22 22:53] ✅ ruff/ty 通過，pytest 26 件通過．.env 反映 (firefox/file) を確認．
+- [2026-06-22 23:00] 🔧 Firefox が不安定だったため `.env` を chromium に戻した (browser=chromium 確認)．
+- [2026-06-22 23:02] ✅ 実トークンで疎通確認成功: courses 23 / assignments 187 / materials 133 / announcements 76．
+- [2026-06-22 23:05] 🔧 資料一覧から label (見出し) を除外する小修正．pytest 27 件通過．
+- [2026-06-22 23:12] ✅ Claude Code に local スコープで登録 (~/myfiles/ScienceTokyo/classes/)．Connected 確認．
+- [2026-06-22 23:20] 🔧 サブディレクトリでも有効化するため project スコープ (.mcp.json) へ一本化．
+- [2026-06-22 23:21] ✅ 入れ子サブディレクトリからの検出を確認 (.mcp.json は親を遡って読まれる)．
+- [2026-06-22 23:30] 🔍 コードレビュー実施: ruff/format/ty/pytest(27件) 全パス，機密情報の混入なし．
+- [2026-06-22 23:30] ⚠️ HIGH 2件検出: ① URL 種別資料 DL 時のトークン外部送出 ② filename のパストラバーサル未対策．
+- [2026-06-22 23:40] 🔧 `moodle_client.py` に `same_host`・`safe_filename` を追加し `download_material` を防御 (FILE 種別 + 同一ホストに限定，ファイル名は basename 化)．
+- [2026-06-22 23:41] ✅ HIGH 2件を修正．単体テスト 8 件追加し ruff/format/ty 通過，pytest 35 件通過．
