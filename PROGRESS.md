@@ -36,3 +36,6 @@
 - [2026-06-22 23:30] ⚠️ HIGH 2件検出: ① URL 種別資料 DL 時のトークン外部送出 ② filename のパストラバーサル未対策．
 - [2026-06-22 23:40] 🔧 `moodle_client.py` に `same_host`・`safe_filename` を追加し `download_material` を防御 (FILE 種別 + 同一ホストに限定，ファイル名は basename 化)．
 - [2026-06-22 23:41] ✅ HIGH 2件を修正．単体テスト 8 件追加し ruff/format/ty 通過，pytest 35 件通過．
+- [2026-06-24 23:42] 🚀 タスク「研究室共有向けの使い方ドキュメント作成」を開始しました．
+- [2026-06-24 23:42] 🔧 `docs/USAGE.md` を作成 (導入・初回ログイン・MCP 登録・利用例・トラブル対応・共有時の注意)．
+- [2026-06-24 23:45] 🔧 `docs/USAGE.md` に Codex CLI での登録手順 (config.toml / codex mcp add) を追記．
