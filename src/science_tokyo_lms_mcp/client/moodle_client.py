@@ -7,16 +7,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from time import monotonic
+from typing import Any, TypeVar
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from science_tokyo_lms_mcp.auth.token import load_token
+from science_tokyo_lms_mcp.auth.token import (
+    ReauthRequiredError,
+    acquire_token,
+    load_token,
+    save_token,
+)
 from science_tokyo_lms_mcp.config import Settings, get_settings
 from science_tokyo_lms_mcp.models import (
     Announcement,
@@ -41,6 +49,32 @@ _KIND_BY_MODNAME = {
 
 class MoodleAPIError(RuntimeError):
     """Moodle Web Services の呼び出しに失敗した場合に送出する."""
+
+
+# Moodle Web Services / upload.php / ファイル配信が「トークン無効・期限切れ」を示す
+# errorcode．再ログインで回復し得るものに限定する (権限不足やサーバ都合は含めない)．
+AUTH_ERROR_CODES: frozenset[str] = frozenset({"invalidtoken", "accesstokeninvalid", "tokenexpired"})
+_AUTH_HTTP_STATUSES: frozenset[int] = frozenset({401, 403})
+
+T = TypeVar("T")
+
+
+class TokenExpiredError(MoodleAPIError):
+    """トークン無効・期限切れを検知した内部シグナル (自動再ログインを促す)."""
+
+
+class AuthRequiredError(MoodleAPIError):
+    """自動再ログインが MFA 必要などで失敗した終端エラー (ユーザー操作を案内)."""
+
+
+def _is_auth_errorcode(code: str | None) -> bool:
+    """Moodle の errorcode が再ログイン対象 (トークン無効) か判定する."""
+    return code in AUTH_ERROR_CODES
+
+
+def _is_auth_status(status: int) -> bool:
+    """HTTP ステータスが認証エラー (401 / 403) か判定する."""
+    return status in _AUTH_HTTP_STATUSES
 
 
 def flatten_params(params: dict[str, Any]) -> dict[str, str]:
@@ -244,6 +278,8 @@ class MoodleClient:
         self.settings = settings or get_settings()
         self._token = token
         self._userid: int | None = None
+        self._relogin_lock = asyncio.Lock()
+        self._relogin_blocked_until: float = 0.0
 
     @property
     def token(self) -> str:
@@ -255,8 +291,69 @@ class MoodleClient:
             raise MoodleAPIError(msg)
         return self._token
 
+    async def _with_reauth(self, make_coro: Callable[[], Awaitable[T]]) -> T:
+        """認証エラーなら 1 回だけ自動再ログインしてリトライする共通ラッパ.
+
+        ``make_coro`` は実行のたびに新しいコルーチンを返すファクトリで，リトライ時に
+        最新の ``self.token`` を読み直せるようにする．無限ループ防止のためリトライは
+        1 回のみとする．``wstoken`` 明示時や ``auto_relogin=False`` 時は再ログイン
+        せず，案内用の :class:`AuthRequiredError` を送出する．
+
+        Args:
+            make_coro: 実行したい処理を返すファクトリ (引数なし)．
+
+        Returns:
+            ``make_coro`` の実行結果．
+
+        Raises:
+            AuthRequiredError: 再ログイン不可，または再取得に失敗した場合．
+        """
+        try:
+            return await make_coro()
+        except TokenExpiredError as exc:
+            if self.settings.wstoken or not self.settings.auto_relogin:
+                msg = "トークンが無効です．`uv run science-tokyo-lms-login` を実行してください．"
+                raise AuthRequiredError(msg) from exc
+            await self._reacquire_token(stale=self._token)
+            return await make_coro()
+
+    async def _reacquire_token(self, stale: str | None) -> None:
+        """ヘッドレスで再ログインし新トークンを保存・反映する (同時多発を 1 回に集約).
+
+        複数の呼び出しが同時に認証エラーへ陥っても，ロックと二重チェックにより
+        ブラウザ起動と :func:`acquire_token` は 1 回だけ実行する．直近で MFA 必要に
+        より失敗していれば，クールダウン中はブラウザを起動せず即座に案内エラーとする．
+
+        Args:
+            stale: 失敗時に参照していた古いトークン (更新済みかの判定に用いる)．
+
+        Raises:
+            AuthRequiredError: MFA が必要，またはクールダウン中で再取得できない場合．
+        """
+        async with self._relogin_lock:
+            # 待機中に別コルーチンが更新済みなら何もしない．
+            if self._token is not None and self._token != stale:
+                return
+            now = monotonic()
+            if now < self._relogin_blocked_until:
+                msg = (
+                    "自動再ログインに失敗済みです．"
+                    "`uv run science-tokyo-lms-login` を実行してください．"
+                )
+                raise AuthRequiredError(msg)
+            try:
+                new_token = await acquire_token(self.settings, headless=True)
+            except ReauthRequiredError as exc:
+                self._relogin_blocked_until = now + self.settings.relogin_cooldown_s
+                raise AuthRequiredError(str(exc)) from exc
+            save_token(new_token, self.settings)
+            self._token = new_token
+            self._relogin_blocked_until = 0.0
+
     async def _call(self, wsfunction: str, **params: Any) -> Any:
         """Web Services 関数を呼び出して結果を返す.
+
+        トークン無効を検知した場合は 1 回だけ自動再ログインしてリトライする．
 
         Args:
             wsfunction: 呼び出す関数名．
@@ -267,20 +364,29 @@ class MoodleClient:
 
         Raises:
             MoodleAPIError: Moodle が例外を返した場合．
+            AuthRequiredError: 自動再ログインに失敗した場合．
         """
-        data = {
-            "wstoken": self.token,
-            "wsfunction": wsfunction,
-            "moodlewsrestformat": "json",
-        }
-        data.update(flatten_params(params))
-        async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
-            resp = await client.post(self.settings.ws_endpoint, data=data)
-        resp.raise_for_status()
-        payload = resp.json()
-        if isinstance(payload, dict) and payload.get("exception"):
-            raise MoodleAPIError(f"{payload.get('errorcode')}: {payload.get('message')}")
-        return payload
+
+        async def _attempt() -> Any:
+            data = {
+                "wstoken": self.token,
+                "wsfunction": wsfunction,
+                "moodlewsrestformat": "json",
+            }
+            data.update(flatten_params(params))
+            async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
+                resp = await client.post(self.settings.ws_endpoint, data=data)
+            resp.raise_for_status()
+            payload = resp.json()
+            if isinstance(payload, dict) and payload.get("exception"):
+                code = payload.get("errorcode")
+                msg = f"{code}: {payload.get('message')}"
+                if _is_auth_errorcode(code):
+                    raise TokenExpiredError(msg)
+                raise MoodleAPIError(msg)
+            return payload
+
+        return await self._with_reauth(_attempt)
 
     async def _get_userid(self) -> int:
         """サイト情報からユーザ ID を取得する (キャッシュ)."""
@@ -349,9 +455,11 @@ class MoodleClient:
 
         トークン漏洩を防ぐため，ダウンロードは LMS 内のファイル資料に限定する．
         外部リンク (URL 種別) や他ホストへはトークンを付与・送信しない．
+        トークン無効を検知した場合は 1 回だけ自動再ログインしてリトライする．
 
         Raises:
             MoodleAPIError: URL がない，ファイル種別でない，または LMS 外ホストの場合．
+            AuthRequiredError: 自動再ログインに失敗した場合．
         """
         if not material.url:
             raise MoodleAPIError("ダウンロード可能な URL がありません．")
@@ -359,14 +467,27 @@ class MoodleClient:
             raise MoodleAPIError("ファイル種別の資料のみ DL できます (外部リンクは対象外)．")
         if not same_host(material.url, self.settings.lms_base_url):
             raise MoodleAPIError("LMS 内のファイルのみダウンロードできます (外部ホストは対象外)．")
-        url = append_token(material.url, self.token)
-        raw_name = material.filename or material.url.split("/")[-1].split("?")[0]
+        material_url = material.url  # 上のチェックで None でないことが確定している．
+        raw_name = material.filename or material_url.split("/")[-1].split("?")[0]
         filename = safe_filename(raw_name)
         dest = Path(dest_dir) / filename
-        async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
-            resp = await client.get(url, follow_redirects=True)
-        resp.raise_for_status()
-        dest.write_bytes(resp.content)
+
+        async def _attempt() -> bytes:
+            # リトライ時に最新トークンで URL を作り直す．
+            url = append_token(material_url, self.token)
+            async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
+                resp = await client.get(url, follow_redirects=True)
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if _is_auth_status(exc.response.status_code):
+                    raise TokenExpiredError(
+                        f"ファイル取得が認証エラー: {exc.response.status_code}"
+                    ) from exc
+                raise
+            return resp.content
+
+        dest.write_bytes(await self._with_reauth(_attempt))
         return dest
 
     async def list_assignments(self, course_id: str | None = None) -> list[Assignment]:
@@ -433,7 +554,8 @@ class MoodleClient:
         """ファイル群をドラフト領域へアップロードし draft item id を返す.
 
         複数ファイルは 1 つ目で得た item id を 2 つ目以降に引き継ぎ，
-        同一ドラフトへ集約する．
+        同一ドラフトへ集約する．トークン無効を検知した場合は 1 回だけ自動再ログイン
+        してリトライする (リトライ時は新規ドラフトを作り直す)．
 
         Args:
             file_paths: アップロードするローカルファイル．
@@ -444,26 +566,40 @@ class MoodleClient:
 
         Raises:
             MoodleAPIError: アップロードに失敗した場合．
+            AuthRequiredError: 自動再ログインに失敗した場合．
         """
         upload_url = f"{self.settings.lms_base_url.rstrip('/')}/webservice/upload.php"
-        current = itemid
-        async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
-            for path in file_paths:
-                data = {"token": self.token, "itemid": str(current)}
-                with path.open("rb") as fh:
-                    files = {"file": (path.name, fh, "application/octet-stream")}
-                    resp = await client.post(upload_url, data=data, files=files)
-                resp.raise_for_status()
-                payload = resp.json()
-                # upload.php はエラー時に REST と異なる dict 形式を返す．
-                if isinstance(payload, dict) and payload.get("error"):
-                    raise MoodleAPIError(
-                        f"アップロード失敗: {payload.get('error')} ({payload.get('errorcode')})"
-                    )
-                if not isinstance(payload, list) or not payload:
-                    raise MoodleAPIError("アップロード応答が不正です．")
-                current = int(payload[0]["itemid"])
-        return current
+
+        async def _attempt() -> int:
+            current = itemid
+            async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
+                for path in file_paths:
+                    data = {"token": self.token, "itemid": str(current)}
+                    with path.open("rb") as fh:
+                        files = {"file": (path.name, fh, "application/octet-stream")}
+                        resp = await client.post(upload_url, data=data, files=files)
+                    try:
+                        resp.raise_for_status()
+                    except httpx.HTTPStatusError as exc:
+                        if _is_auth_status(exc.response.status_code):
+                            raise TokenExpiredError(
+                                f"アップロードが認証エラー: {exc.response.status_code}"
+                            ) from exc
+                        raise
+                    payload = resp.json()
+                    # upload.php はエラー時に REST と異なる dict 形式を返す．
+                    if isinstance(payload, dict) and payload.get("error"):
+                        code = payload.get("errorcode")
+                        msg = f"アップロード失敗: {payload.get('error')} ({code})"
+                        if _is_auth_errorcode(code):
+                            raise TokenExpiredError(msg)
+                        raise MoodleAPIError(msg)
+                    if not isinstance(payload, list) or not payload:
+                        raise MoodleAPIError("アップロード応答が不正です．")
+                    current = int(payload[0]["itemid"])
+            return current
+
+        return await self._with_reauth(_attempt)
 
     async def submit_assignment_files(self, assignment_id: str, file_paths: list[Path]) -> bool:
         """ファイルを課題に提出する (ドラフト保存し，必要なら採点提出する).

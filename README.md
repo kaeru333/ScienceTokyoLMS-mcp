@@ -35,8 +35,19 @@ uv run science-tokyo-lms-login
 ```
 
 取得したトークンは keyring (利用不可なら `.auth/wstoken`，いずれも .gitignore 済み) に
-保存され，以降はブラウザ不要で Web Services API を呼び出します．トークンが失効したら
-再度上記コマンドを実行してください．
+保存され，以降はブラウザ不要で Web Services API を呼び出します．
+
+### トークン失効時の自動再ログイン
+
+トークンが失効すると，MCP サーバは API 呼び出し中にそれを検知し，**ヘッドレスブラウザで
+自動的に再ログインして元の操作をリトライ**します．永続プロファイル (`.auth/profile/`) の
+SSO セッションが生きていれば，ユーザー操作なしに復旧します．SSO セッションも切れていて
+MFA の再入力が必要な場合のみ自動再ログインは失敗し，`uv run science-tokyo-lms-login` の
+実行を促すエラーを返すので，手動で上記コマンドを実行してください．
+
+> サーバが自動再ログインする際は永続プロファイルを一時的に占有します．**MCP サーバ稼働中に
+> 別途 `science-tokyo-lms-login` を実行しない**でください (同一プロファイルを 2 プロセスで
+> 同時に開けません)．自動再ログインを無効化したい場合は `STLMS_AUTO_RELOGIN=false` を設定します．
 
 ## セットアップ
 
@@ -56,6 +67,7 @@ cp .env.example .env                 # 必要に応じて編集 (年度・ブラ
 | `STLMS_BROWSER` | `chromium` | トークン取得に使うブラウザ (`chromium` / `firefox` / `webkit`) |
 | `STLMS_TOKEN_BACKEND` | `auto` | トークン保存方式 (`auto` / `keyring` / `file`) |
 | `STLMS_WSTOKEN` | (なし) | トークンを直接指定する場合 (最優先) |
+| `STLMS_AUTO_RELOGIN` | `true` | トークン失効時にヘッドレスで自動再ログインするか |
 
 > keyring (パスワードストア) が使えない環境では `STLMS_TOKEN_BACKEND=file` を指定すると，
 > トークンを `.auth/wstoken` (.gitignore 済み，パーミッション 0600) に保存します．

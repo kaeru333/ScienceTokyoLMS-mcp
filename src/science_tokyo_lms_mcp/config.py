@@ -82,6 +82,22 @@ class Settings(BaseSettings):
         default=60.0,
         description="Web Services / ファイル取得の HTTP タイムアウト (秒).",
     )
+    auto_relogin: bool = Field(
+        default=True,
+        description="トークン無効検知時にヘッドレスで自動再ログインするか．false で即エラー.",
+    )
+    relogin_timeout_s: float = Field(
+        default=45.0,
+        description="ヘッドレス再ログインでトークン取得を待つ上限秒．超えたら MFA 必要とみなす.",
+    )
+    relogin_cooldown_s: float = Field(
+        default=60.0,
+        description="ヘッドレス再ログイン失敗後，再試行を抑止する秒数 (ブラウザ多重起動の防止).",
+    )
+    login_timeout_s: int = Field(
+        default=300,
+        description="手動 (GUI) ログインでトークン取得を待つ上限秒．MFA 入力の猶予.",
+    )
 
     @property
     def ws_endpoint(self) -> str:

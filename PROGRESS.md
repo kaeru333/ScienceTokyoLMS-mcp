@@ -46,3 +46,7 @@
 - [2026-06-28 00:10] 🔧 `moodle_client.py` に拡張子パース・制約抽出・upload.php アップロード・save/submit を追加 (`base.py`/`playwright_client.py` のプロトコルも更新)．
 - [2026-06-28 00:15] 🔧 `tools/submissions.py` を新規作成 (confirm=False はプレビュー，confirm=True で実提出)．`tools/__init__.py` に登録．
 - [2026-06-28 00:18] ✅ `tests/test_submissions.py` を追加．ruff/format/ty 通過，pytest 46 件通過．サーバ構築でツール登録も確認．
+- [2026-06-28 09:33] 🚀 タスク「トークン切れ時のシームレスな自動再ログイン」を開始．`config.py` に auto_relogin 等 4 設定を追加．
+- [2026-06-28 09:45] 🔧 `token.py` に `ReauthRequiredError`，`acquire_token` のヘッドレス化と外部ホスト遷移による早期 MFA 検知を実装．`login.py` は GUI ログインを明示．
+- [2026-06-28 09:45] 🔧 `moodle_client.py` に認証エラー検知 (`TokenExpiredError`/`AuthRequiredError`) と `_with_reauth`・`_reacquire_token` (ロック・クールダウンで単一集約) を追加し，_call/download/upload をラップ．
+- [2026-06-28 09:45] ✅ `tests/test_relogin.py` (10 件) を追加．ruff/format/ty 通過，pytest 56 件通過．README に自動再ログインの説明を追記．

@@ -19,7 +19,7 @@ from science_tokyo_lms_mcp.config import get_settings
 async def _run() -> None:
     """トークンを取得して保存する."""
     settings = get_settings()
-    token = await acquire_token(settings)
+    token = await acquire_token(settings, headless=False)
     save_token(token, settings)
     print("トークンを取得・保存しました．MCP サーバから利用できます．")
 
