@@ -267,6 +267,7 @@ URL を変えるとトークンの保存キーも変わるため，**新しい�
 | ブラウザが起動しない | `uv run playwright install chromium` を実行したか確認 |
 | Claude から見えない / `Failed` 表示 | `--directory` の絶対パスを確認．Desktop は再起動．`uv run science-tokyo-lms-mcp` 単体で起動するか確認 |
 | 別年度のコースが出てくる | `.env` の `STLMS_LMS_BASE_URL` の年度を確認し，必要なら再ログイン |
+| 有効なトークンなのに `403 Forbidden` が返る | LMS 前段の WAF/ELB がクライアントの User-Agent をボットとみなし遮断している可能性．既定でブラウザ風 UA を送るが，弾かれる場合は `.env` の `STLMS_USER_AGENT` を最新ブラウザの UA 文字列に更新する |
 
 サーバが単体で起動するかの確認 (stdio で待ち受けます．`Ctrl+C` で終了):
 

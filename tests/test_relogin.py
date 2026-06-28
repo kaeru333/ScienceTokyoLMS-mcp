@@ -270,3 +270,47 @@ def test_download_auto_relogin(monkeypatch, tmp_path):
 
     assert dest.read_bytes() == b"PDFDATA"
     assert acq["calls"] == 1
+
+
+# --- User-Agent 付与 (LMS 前段 ELB の 403 対策) ------------------------------
+
+
+def test_default_user_agent_is_browser_like():
+    """既定 user_agent はブラウザ風で，python-httpx を含まない."""
+    ua = Settings(token_backend="file").user_agent
+    assert ua
+    assert "python-httpx" not in ua
+    assert ua.startswith("Mozilla/")
+
+
+def test_call_sends_browser_user_agent(monkeypatch):
+    """WS 呼び出し時の httpx クライアントにブラウザ風 User-Agent が設定される.
+
+    既定の python-httpx UA は LMS 前段の AWS ELB に 403 で弾かれるため，
+    クライアント生成時に User-Agent を上書きしていることを検証する．
+    """
+    captured: dict[str, object] = {}
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            captured["headers"] = kwargs.get("headers")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, data=None, **kwargs):
+            return _resp(json_data={"userid": 7})
+
+    monkeypatch.setattr(moodle_client.httpx, "AsyncClient", _Client)
+    client = MoodleClient(settings=Settings(token_backend="file"), token="tok")
+
+    asyncio.run(client._call("core_webservice_get_site_info"))
+
+    headers = captured["headers"]
+    assert isinstance(headers, dict)
+    ua = headers.get("User-Agent")
+    assert isinstance(ua, str)
+    assert not ua.startswith("python-httpx")

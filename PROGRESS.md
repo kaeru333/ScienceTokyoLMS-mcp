@@ -50,3 +50,9 @@
 - [2026-06-28 09:45] 🔧 `token.py` に `ReauthRequiredError`，`acquire_token` のヘッドレス化と外部ホスト遷移による早期 MFA 検知を実装．`login.py` は GUI ログインを明示．
 - [2026-06-28 09:45] 🔧 `moodle_client.py` に認証エラー検知 (`TokenExpiredError`/`AuthRequiredError`) と `_with_reauth`・`_reacquire_token` (ロック・クールダウンで単一集約) を追加し，_call/download/upload をラップ．
 - [2026-06-28 09:45] ✅ `tests/test_relogin.py` (10 件) を追加．ruff/format/ty 通過，pytest 56 件通過．README に自動再ログインの説明を追記．
+- [2026-06-29 00:20] 🏁 version を 0.1.0b1 に更新してコミット・main へ push．GitHub に beta プレリリース v0.1.0-beta.1 を作成 (自動再ログインを含む初の公開リリース)．
+- [2026-06-29 12:00] 🚀 タスク「WS REST だけ 403 になる不具合の調査」を開始 (前回は「学内/VPN 限定」と推定)．
+- [2026-06-29 12:05] 🔍 切り分け診断 (トークン無し・UA だけ変えて匿名 POST): python-httpx UA と空 UA は `awselb/2.0` から 403，ブラウザ風 UA は Moodle 本体 (Apache/PHP) に到達し 200．➡ 原因は MCP 側の User-Agent．前回の「VPN 限定」結論は誤りと判明．
+- [2026-06-29 12:10] 🔧 `config.py` に `user_agent` (STLMS_USER_AGENT) を追加し，`moodle_client.py` に `_http_client()` を新設．WS/DL/アップロードの httpx 生成 3 箇所にブラウザ風 UA を付与．
+- [2026-06-29 12:12] ✅ ruff/format/ty 通過，pytest 58 件通過 (UA 検証テスト 2 件追加)．実トークンで疎通成功: site=Science Tokyo LMS / courses 23 件．403 解消を確認．`docs/USAGE.md` のトラブルシュートに 403→STLMS_USER_AGENT を追記．
+- [2026-06-29 12:20] 🏁 fix を main にコミット・push し version を 0.1.0b2 に更新．GitHub に beta プレリリース v0.1.0-beta.2 を作成 (WS の 403 修正)．

@@ -82,6 +82,16 @@ class Settings(BaseSettings):
         default=60.0,
         description="Web Services / ファイル取得の HTTP タイムアウト (秒).",
     )
+    user_agent: str = Field(
+        default=(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        description=(
+            "WS / ファイル取得時に送る User-Agent．既定の python-httpx だと LMS "
+            "前段の AWS ELB に 403 で弾かれるためブラウザ風にする (STLMS_USER_AGENT)."
+        ),
+    )
     auto_relogin: bool = Field(
         default=True,
         description="トークン無効検知時にヘッドレスで自動再ログインするか．false で即エラー.",

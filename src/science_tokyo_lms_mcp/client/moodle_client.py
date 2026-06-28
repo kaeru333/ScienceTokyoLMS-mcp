@@ -350,6 +350,20 @@ class MoodleClient:
             self._token = new_token
             self._relogin_blocked_until = 0.0
 
+    def _http_client(self) -> httpx.AsyncClient:
+        """ブラウザ風 User-Agent を付けた httpx クライアントを生成する.
+
+        既定の python-httpx UA は LMS 前段の AWS ELB にボットとみなされ，
+        Moodle に到達する前に 403 で遮断される．そのためブラウザ風 UA を付与する．
+
+        Returns:
+            User-Agent を設定済みの :class:`httpx.AsyncClient`．
+        """
+        return httpx.AsyncClient(
+            timeout=self.settings.http_timeout_s,
+            headers={"User-Agent": self.settings.user_agent},
+        )
+
     async def _call(self, wsfunction: str, **params: Any) -> Any:
         """Web Services 関数を呼び出して結果を返す.
 
@@ -374,7 +388,7 @@ class MoodleClient:
                 "moodlewsrestformat": "json",
             }
             data.update(flatten_params(params))
-            async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
+            async with self._http_client() as client:
                 resp = await client.post(self.settings.ws_endpoint, data=data)
             resp.raise_for_status()
             payload = resp.json()
@@ -475,7 +489,7 @@ class MoodleClient:
         async def _attempt() -> bytes:
             # リトライ時に最新トークンで URL を作り直す．
             url = append_token(material_url, self.token)
-            async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
+            async with self._http_client() as client:
                 resp = await client.get(url, follow_redirects=True)
             try:
                 resp.raise_for_status()
@@ -572,7 +586,7 @@ class MoodleClient:
 
         async def _attempt() -> int:
             current = itemid
-            async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
+            async with self._http_client() as client:
                 for path in file_paths:
                     data = {"token": self.token, "itemid": str(current)}
                     with path.open("rb") as fh:
