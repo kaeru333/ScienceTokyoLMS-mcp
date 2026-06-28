@@ -1,6 +1,6 @@
 [project]
 name = "science-tokyo-lms-mcp"
-version = "0.1.0b1"
+version = "0.1.0b2"
 description = "東京科学大学 Science Tokyo LMS 用 MCP サーバ (講義資料DL・課題締切確認など)"
 readme = "README.md"
 authors = [
