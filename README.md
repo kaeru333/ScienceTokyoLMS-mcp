@@ -89,9 +89,30 @@ MCP クライアント (例: Claude Desktop / Claude Code) には以下のよう
 | `list_assignments(course_id?)` | 課題と締切の一覧 |
 | `get_upcoming_deadlines(days=7)` | 直近の課題を締切順に取得 |
 | `list_announcements(course_id?)` | お知らせ・休講情報 (アナウンス) の一覧 |
+| `submit_assignment_files(assignment_id, file_paths, confirm=False)` | 課題へのファイル提出 (2 段階: 既定はプレビュー) |
 
 > 課題の提出済み判定は別 API が必要なため，現状 `submitted` は常に `false` です
 > (今後 `mod_assign_get_submission_status` で対応予定)．
+
+### 課題のファイル提出 (`submit_assignment_files`)
+
+提出は **2 段階** で行います．いきなり提出せず，途中で内容を確認する工程を挟みます．
+
+1. `confirm=False` (既定) で呼ぶと，Moodle へは**一切書き込まず**，課題の説明文・
+   提出制約 (許可拡張子・最大サイズ・最大数・下書き要否) と，各ファイルのローカル
+   検査結果 (存在・拡張子・サイズ) を返します．
+2. Claude が各ファイルを開いて中身を確認し，課題の説明文と突き合わせて妥当性を判断します．
+3. 問題なければ `confirm=True` で同じ引数を渡して再度呼ぶと，実際に提出します．
+
+提出は `webservice/upload.php` でドラフト領域へアップロードし，`mod_assign_save_submission`
+で添付，下書き方式の課題では `mod_assign_submit_for_grading` で採点提出まで確定します．
+
+> **注意**
+> - 拡張子が許可リストと明確に異なるファイルは `confirm=True` でも提出を中止します．
+>   ただし Moodle のタイプグループ (`document` 等) は近似判定のため，警告に留めます．
+> - 採点提出は**取り消せない場合があります**．まずはテスト用課題で試すことを推奨します．
+> - 提出規約のある課題では `acceptsubmissionstatement=1` (同意) として送信します．
+>   `confirm=True` の実行をもって同意とみなす点に留意してください．
 
 ## 主な Moodle Web Services 関数の対応
 
@@ -101,6 +122,7 @@ MCP クライアント (例: Claude Desktop / Claude Code) には以下のよう
 | `list_materials` | `core_course_get_contents` |
 | `list_assignments` | `mod_assign_get_assignments` |
 | `list_announcements` | `mod_forum_get_forums_by_courses` + `mod_forum_get_forum_discussions` |
+| `submit_assignment_files` | `webservice/upload.php` + `mod_assign_save_submission` (+ `mod_assign_submit_for_grading`) |
 
 ## ディレクトリ構成
 
@@ -117,7 +139,7 @@ src/science_tokyo_lms_mcp/
 │   ├── base.py            # LMSClient プロトコル
 │   ├── moodle_client.py   # Moodle Web Services 実装 (既定)
 │   └── playwright_client.py  # スクレイピング方式のフォールバック
-└── tools/                 # MCP ツール (courses / materials / deadlines / announcements)
+└── tools/                 # MCP ツール (courses / materials / deadlines / announcements / submissions)
 ```
 
 ## 開発

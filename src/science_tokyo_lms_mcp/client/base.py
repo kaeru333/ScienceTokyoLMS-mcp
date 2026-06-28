@@ -10,7 +10,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from science_tokyo_lms_mcp.models import Announcement, Assignment, Course, Material
+from science_tokyo_lms_mcp.models import (
+    Announcement,
+    Assignment,
+    Course,
+    Material,
+    SubmissionConstraints,
+)
 
 
 @runtime_checkable
@@ -67,5 +73,30 @@ class LMSClient(Protocol):
 
         Returns:
             お知らせの一覧．
+        """
+        ...
+
+    async def get_assignment_detail(
+        self, assignment_id: str
+    ) -> tuple[Assignment, SubmissionConstraints]:
+        """指定課題の詳細 (説明文) と提出制約を取得する.
+
+        Args:
+            assignment_id: 課題 (assignment) の ID．
+
+        Returns:
+            課題と提出制約の組．
+        """
+        ...
+
+    async def submit_assignment_files(self, assignment_id: str, file_paths: list[Path]) -> bool:
+        """ファイルを課題に提出する.
+
+        Args:
+            assignment_id: 課題 (assignment) の ID．
+            file_paths: 提出するローカルファイル．
+
+        Returns:
+            採点提出まで確定したら ``True``，保存のみなら ``False``．
         """
         ...

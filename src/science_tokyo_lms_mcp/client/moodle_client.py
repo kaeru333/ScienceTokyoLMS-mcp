@@ -18,7 +18,14 @@ import httpx
 
 from science_tokyo_lms_mcp.auth.token import load_token
 from science_tokyo_lms_mcp.config import Settings, get_settings
-from science_tokyo_lms_mcp.models import Announcement, Assignment, Course, Material, MaterialKind
+from science_tokyo_lms_mcp.models import (
+    Announcement,
+    Assignment,
+    Course,
+    Material,
+    MaterialKind,
+    SubmissionConstraints,
+)
 
 _JST = ZoneInfo("Asia/Tokyo")
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -127,6 +134,101 @@ def _strip_html(text: str | None) -> str | None:
     if not text:
         return text
     return _TAG_RE.sub("", text).strip()
+
+
+# Moodle のファイルタイプグループ名 (document 等) の近似展開表．
+# Moodle 本体はサーバ側 MIME DB で判定するため完全網羅はできない．
+# ここでは実用的な主要拡張子のみを対応づける (判定はベストエフォート)．
+_FILETYPE_GROUPS: dict[str, tuple[str, ...]] = {
+    "document": (".doc", ".docx", ".pdf", ".rtf", ".odt", ".txt"),
+    "image": (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg"),
+    "spreadsheet": (".xls", ".xlsx", ".csv", ".ods"),
+    "presentation": (".ppt", ".pptx", ".odp"),
+    "archive": (".zip", ".tar", ".gz", ".7z"),
+    "video": (".mp4", ".mov", ".avi", ".mkv"),
+    "audio": (".mp3", ".wav", ".m4a", ".flac"),
+    "web_file": (".html", ".htm", ".css", ".js"),
+}
+
+
+def _parse_filetypes(raw: str) -> tuple[str, ...]:
+    """提出可能拡張子の文字列 (filetypeslist) を拡張子タプルに正規化する.
+
+    Moodle の filetypeslist は ``.pdf,.docx`` / ``pdf docx`` / ``document`` 等が
+    混在しうる．ドット始まりに正規化し，グループ名は :data:`_FILETYPE_GROUPS`
+    で近似展開する．空文字なら制限なし (空タプル) とみなす．
+
+    Args:
+        raw: filetypeslist の生の値．
+
+    Returns:
+        正規化した拡張子のタプル (小文字・ドット付き，順序保持で重複除去)．
+    """
+    if not raw or not raw.strip():
+        return ()
+    tokens = re.split(r"[\s,;]+", raw.strip().lower())
+    exts: list[str] = []
+    for tok in tokens:
+        if not tok:
+            continue
+        if tok in _FILETYPE_GROUPS:
+            exts.extend(_FILETYPE_GROUPS[tok])
+        else:
+            exts.append(tok if tok.startswith(".") else f".{tok}")
+    seen: dict[str, None] = {}
+    for ext in exts:
+        seen.setdefault(ext, None)
+    return tuple(seen)
+
+
+def _parse_constraints(assignment: dict[str, Any]) -> SubmissionConstraints:
+    """mod_assign_get_assignments の 1 課題から提出制約を抽出する.
+
+    Args:
+        assignment: ``assignments`` 配列の 1 要素．
+
+    Returns:
+        抽出した :class:`SubmissionConstraints`．
+    """
+    cfg: dict[tuple[str, str], str] = {}
+    for c in assignment.get("configs", []):
+        key = (c.get("subtype") or "", c.get("name") or "")
+        cfg[key] = c.get("value") or ""
+
+    filetypes_raw = cfg.get(("assignsubmission_file", "filetypeslist"), "")
+    max_size = int(cfg.get(("assignsubmission_file", "maxsubmissionsizebytes"), "0") or "0")
+    max_files = int(cfg.get(("assignsubmission_file", "maxfilesubmissions"), "1") or "1")
+    enabled = cfg.get(("assignsubmission_file", "enabled"), "1") in ("1", "")
+
+    return SubmissionConstraints(
+        file_types=_parse_filetypes(filetypes_raw),
+        file_types_raw=filetypes_raw,
+        max_size_bytes=max_size,
+        max_files=max_files,
+        submission_drafts=str(assignment.get("submissiondrafts", "0")) == "1",
+        require_statement=str(assignment.get("requiresubmissionstatement", "0")) == "1",
+        file_plugin_enabled=enabled,
+    )
+
+
+def _raise_on_warnings(result: Any, where: str) -> None:
+    """提出系 API の warnings 応答を検査し，問題があれば例外化する.
+
+    ``mod_assign_save_submission`` 等は成功時に空配列を返し，失敗時は
+    warnings 配列に内容を持つ．
+
+    Args:
+        result: API 応答 (成功時は空 list)．
+        where: 呼び出し元の関数名 (エラーメッセージ用)．
+
+    Raises:
+        MoodleAPIError: warnings が存在する場合．
+    """
+    if isinstance(result, list) and result:
+        msgs = "; ".join(
+            f"{w.get('item', '')}:{w.get('message', '')}" for w in result if isinstance(w, dict)
+        )
+        raise MoodleAPIError(f"{where} で警告が返されました: {msgs}")
 
 
 class MoodleClient:
@@ -292,6 +394,109 @@ class MoodleClient:
                     )
                 )
         return assignments
+
+    async def get_assignment_detail(
+        self, assignment_id: str
+    ) -> tuple[Assignment, SubmissionConstraints]:
+        """指定課題の詳細 (説明文 intro) と提出制約を取得する.
+
+        Args:
+            assignment_id: 課題 (assignment) の ID．
+
+        Returns:
+            :class:`Assignment` (intro 付き) と :class:`SubmissionConstraints` の組．
+
+        Raises:
+            MoodleAPIError: 課題が見つからない場合．
+        """
+        raw = await self._call("mod_assign_get_assignments")
+        base = self.settings.lms_base_url.rstrip("/")
+        for course in raw.get("courses", []):
+            cid = str(course["id"])
+            for a in course.get("assignments", []):
+                if str(a["id"]) != str(assignment_id):
+                    continue
+                assignment = Assignment(
+                    id=str(a["id"]),
+                    course_id=cid,
+                    title=a.get("name") or "",
+                    due_at=_to_datetime(a.get("duedate")),
+                    submitted=False,
+                    url=f"{base}/mod/assign/view.php?id={a.get('cmid')}",
+                    intro=_strip_html(a.get("intro")),
+                )
+                return assignment, _parse_constraints(a)
+        msg = f"課題が見つかりません: assignment_id={assignment_id}"
+        raise MoodleAPIError(msg)
+
+    async def _upload_to_draft(self, file_paths: list[Path], itemid: int = 0) -> int:
+        """ファイル群をドラフト領域へアップロードし draft item id を返す.
+
+        複数ファイルは 1 つ目で得た item id を 2 つ目以降に引き継ぎ，
+        同一ドラフトへ集約する．
+
+        Args:
+            file_paths: アップロードするローカルファイル．
+            itemid: 集約先の draft item id (0 なら新規)．
+
+        Returns:
+            確定した draft item id．
+
+        Raises:
+            MoodleAPIError: アップロードに失敗した場合．
+        """
+        upload_url = f"{self.settings.lms_base_url.rstrip('/')}/webservice/upload.php"
+        current = itemid
+        async with httpx.AsyncClient(timeout=self.settings.http_timeout_s) as client:
+            for path in file_paths:
+                data = {"token": self.token, "itemid": str(current)}
+                with path.open("rb") as fh:
+                    files = {"file": (path.name, fh, "application/octet-stream")}
+                    resp = await client.post(upload_url, data=data, files=files)
+                resp.raise_for_status()
+                payload = resp.json()
+                # upload.php はエラー時に REST と異なる dict 形式を返す．
+                if isinstance(payload, dict) and payload.get("error"):
+                    raise MoodleAPIError(
+                        f"アップロード失敗: {payload.get('error')} ({payload.get('errorcode')})"
+                    )
+                if not isinstance(payload, list) or not payload:
+                    raise MoodleAPIError("アップロード応答が不正です．")
+                current = int(payload[0]["itemid"])
+        return current
+
+    async def submit_assignment_files(self, assignment_id: str, file_paths: list[Path]) -> bool:
+        """ファイルを課題に提出する (ドラフト保存し，必要なら採点提出する).
+
+        Args:
+            assignment_id: 課題 (assignment) の ID．
+            file_paths: 提出するローカルファイル．
+
+        Returns:
+            採点提出 (submit_for_grading) まで確定したら ``True``，
+            保存のみ (保存=提出方式) なら ``False``．
+
+        Raises:
+            MoodleAPIError: 提出に失敗した場合．
+        """
+        _, constraints = await self.get_assignment_detail(assignment_id)
+        draft_id = await self._upload_to_draft(file_paths)
+        save_res = await self._call(
+            "mod_assign_save_submission",
+            assignmentid=int(assignment_id),
+            plugindata={"files_filemanager": draft_id},
+        )
+        _raise_on_warnings(save_res, "mod_assign_save_submission")
+
+        if not constraints.submission_drafts:
+            return False
+        submit_res = await self._call(
+            "mod_assign_submit_for_grading",
+            assignmentid=int(assignment_id),
+            acceptsubmissionstatement=1,
+        )
+        _raise_on_warnings(submit_res, "mod_assign_submit_for_grading")
+        return True
 
     async def list_announcements(self, course_id: str | None = None) -> list[Announcement]:
         """お知らせ・休講情報 (アナウンスフォーラム) の一覧を取得する."""

@@ -38,9 +38,34 @@ LMS の操作を MCP (Model Context Protocol) ツールとして公開し，
 | `list_assignments(course_id?)` | 課題と締切の一覧 (コース省略で全コース横断) |
 | `get_upcoming_deadlines(days=7)` | 直近の未提出課題を締切順に取得 |
 | `list_announcements(course_id?)` | お知らせ・休講情報の一覧 |
+| `submit_assignment_files(assignment_id, file_paths, confirm=False)` | 課題へのファイル提出 (2 段階: 既定はプレビュー) |
 
 > 補足: 課題の提出済み判定は別 API が必要なため，現状 `get_upcoming_deadlines` は
 > 「締切が近い課題」を出しますが，提出済みかどうかは正確に反映されないことがあります．
+
+#### 課題のファイル提出 (`submit_assignment_files`)
+
+ファイルを提出する際は，**2 段階**で安全に行います．
+
+1. まず `confirm=False` (既定) で呼びます．この段階では Moodle へ**書き込みません**．
+   課題の説明文・提出制約 (許可拡張子・最大サイズ・最大数)・各ファイルの検査結果が返ります．
+2. Claude が提出予定ファイルを開いて中身を確認し，課題の説明文と照らして「このファイルで
+   合っているか」を判断します．
+3. 問題なければ `confirm=True` で同じ引数を渡して再度呼ぶと，実際に提出されます．
+
+```
+あなた: 「課題 123 にこのレポート ~/report.pdf を出して」
+Claude: (submit_assignment_files(assignment_id="123", file_paths=["~/report.pdf"]) を実行)
+        → 課題の説明・許可拡張子・ファイル検査結果を確認し，report.pdf の中身を開いて照合
+Claude: 「課題の指示と内容が一致しています．提出してよいですか？」
+あなた: 「お願い」
+Claude: (confirm=True で再実行) → 提出完了
+```
+
+> **注意**
+> - 採点提出は課題設定によっては**取り消せません**．まずはテスト用課題で試すと安心です．
+> - 拡張子が許可リストと明確に異なるファイルは `confirm=True` でも提出を中止します．
+> - 提出規約のある課題は，`confirm=True` の実行をもって規約に同意したものとして提出します．
 
 ---
 

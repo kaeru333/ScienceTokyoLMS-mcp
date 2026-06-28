@@ -39,3 +39,10 @@
 - [2026-06-24 23:42] 🚀 タスク「研究室共有向けの使い方ドキュメント作成」を開始しました．
 - [2026-06-24 23:42] 🔧 `docs/USAGE.md` を作成 (導入・初回ログイン・MCP 登録・利用例・トラブル対応・共有時の注意)．
 - [2026-06-24 23:45] 🔧 `docs/USAGE.md` に Codex CLI での登録手順 (config.toml / codex mcp add) を追記．
+- [2026-06-24 23:52] 🔍 公開前チェック: 機密ファイル (.env/.auth/トークン) は gitignore 済み・追跡外，秘密情報の混入なしを確認．
+- [2026-06-24 23:52] ✅ docs を main にコミットし GitHub に Public 公開 (kaeru333/ScienceTokyoLMS-mcp)．
+- [2026-06-28 00:00] 🚀 タスク「課題のファイル提出機能 (2 段階 confirm + 拡張子制限対応)」を開始しました．
+- [2026-06-28 00:05] 🔧 `models.py` に `Assignment.intro`・`SubmissionConstraints`・`FileCheck`・`SubmissionPlan` を追加．
+- [2026-06-28 00:10] 🔧 `moodle_client.py` に拡張子パース・制約抽出・upload.php アップロード・save/submit を追加 (`base.py`/`playwright_client.py` のプロトコルも更新)．
+- [2026-06-28 00:15] 🔧 `tools/submissions.py` を新規作成 (confirm=False はプレビュー，confirm=True で実提出)．`tools/__init__.py` に登録．
+- [2026-06-28 00:18] ✅ `tests/test_submissions.py` を追加．ruff/format/ty 通過，pytest 46 件通過．サーバ構築でツール登録も確認．

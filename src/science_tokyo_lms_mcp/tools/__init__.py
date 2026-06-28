@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from science_tokyo_lms_mcp.tools import announcements, courses, deadlines, materials
+from science_tokyo_lms_mcp.tools import (
+    announcements,
+    courses,
+    deadlines,
+    materials,
+    submissions,
+)
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -24,3 +30,4 @@ def register_all(mcp: FastMCP) -> None:
     materials.register(mcp)
     deadlines.register(mcp)
     announcements.register(mcp)
+    submissions.register(mcp)

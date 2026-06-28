@@ -14,7 +14,13 @@ from pathlib import Path
 
 from science_tokyo_lms_mcp.auth.session import BrowserSession
 from science_tokyo_lms_mcp.config import Settings, get_settings
-from science_tokyo_lms_mcp.models import Announcement, Assignment, Course, Material
+from science_tokyo_lms_mcp.models import (
+    Announcement,
+    Assignment,
+    Course,
+    Material,
+    SubmissionConstraints,
+)
 
 _NOT_IMPLEMENTED_MSG = (
     "LMS 基盤が未特定のため未実装です．"
@@ -56,4 +62,14 @@ class PlaywrightLMSClient:
 
     async def list_announcements(self, course_id: str | None = None) -> list[Announcement]:
         """お知らせ・休講情報の一覧を取得する (未実装)."""
+        raise NotImplementedError(_NOT_IMPLEMENTED_MSG)
+
+    async def get_assignment_detail(
+        self, assignment_id: str
+    ) -> tuple[Assignment, SubmissionConstraints]:
+        """指定課題の詳細と提出制約を取得する (未実装)."""
+        raise NotImplementedError(_NOT_IMPLEMENTED_MSG)
+
+    async def submit_assignment_files(self, assignment_id: str, file_paths: list[Path]) -> bool:
+        """ファイルを課題に提出する (未実装)."""
         raise NotImplementedError(_NOT_IMPLEMENTED_MSG)
