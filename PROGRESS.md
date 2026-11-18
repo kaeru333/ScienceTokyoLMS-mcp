@@ -56,3 +56,4 @@
 - [2026-06-29 12:10] 🔧 `config.py` に `user_agent` (STLMS_USER_AGENT) を追加し，`moodle_client.py` に `_http_client()` を新設．WS/DL/アップロードの httpx 生成 3 箇所にブラウザ風 UA を付与．
 - [2026-06-29 12:12] ✅ ruff/format/ty 通過，pytest 58 件通過 (UA 検証テスト 2 件追加)．実トークンで疎通成功: site=Science Tokyo LMS / courses 23 件．403 解消を確認．`docs/USAGE.md` のトラブルシュートに 403→STLMS_USER_AGENT を追記．
 - [2026-06-29 12:20] 🏁 fix を main にコミット・push し version を 0.1.0b2 に更新．GitHub に beta プレリリース v0.1.0-beta.2 を作成 (WS の 403 修正)．
+- [2026-11-18 13:39] 🔧 公開リポジトリ運用に合わせて `README.md`・`docs/USAGE.md`・`.env.example`・`config.py` の説明を整理し (実サーバが現在も `/2025` へリダイレクトし `/2026/` は 404 のため既定 URL は維持)，`__init__.py` の `__version__` をパッケージメタデータ (`0.1.0b2`) と同期しました．

@@ -1,8 +1,12 @@
 """東京科学大学 Science Tokyo LMS 用 MCP サーバ.
 
-講義資料のダウンロードや課題締切の確認などを MCP ツールとして提供する．
-認証は Playwright の永続セッション方式を採用し，MFA を含む初回ログインは
-手動で行ったうえで，以降はセッションを再利用する．
+Moodle Web Services REST API とモバイルトークン認証を用いて，
+講義資料のダウンロード・課題締切の確認・課題提出などを MCP ツールとして提供する．
 """
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("science-tokyo-lms-mcp")
+except PackageNotFoundError:
+    __version__ = "0.1.0b2"

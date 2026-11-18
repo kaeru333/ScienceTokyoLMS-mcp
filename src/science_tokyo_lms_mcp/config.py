@@ -32,7 +32,9 @@ class Settings(BaseSettings):
     )
     lms_base_url: str = Field(
         default="https://lms.s.isct.ac.jp/2025/",
-        description="Moodle (Science Tokyo LMS) のベース URL．年度ごとにパスが分かれる.",
+        description=(
+            "Moodle (Science Tokyo LMS) のベース URL．大学側でパスが切り替わった場合のみ変更する."
+        ),
     )
     service: str = Field(
         default="moodle_mobile_app",

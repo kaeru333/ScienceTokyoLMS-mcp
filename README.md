@@ -5,7 +5,7 @@
 ツールとして呼び出せるようにします．
 
 > [!NOTE]
-> 導入して使い始めたいだけの方 (研究室メンバー向け) は [`docs/USAGE.md`](docs/USAGE.md) を参照してください．
+> 導入して使い始めたい方は [`docs/USAGE.md`](docs/USAGE.md) を参照してください．
 > 本 README はおもに方針・内部構成・開発手順をまとめたものです．
 
 > [!WARNING]
@@ -15,12 +15,10 @@
 
 ## 対象と基盤
 
-- **対象 LMS:** Science Tokyo LMS (`https://lms.s.isct.ac.jp/<年度>/`)
-- **基盤:** **Moodle** (確認済み)．年度ごとにパスが分かれる (例: `/2025/`)．
+- **対象 LMS:** Science Tokyo LMS (`https://lms.s.isct.ac.jp/2025/` 等)
+- **基盤:** **Moodle** です．既定の `/2025/` は現在の `https://lms.s.isct.ac.jp/` のリダイレクト先であり，将来大学側でパスが切り替わった場合は設定で変更できる．
 - **方式:** Moodle **Web Services REST API** + モバイルトークン認証．
   ブラウザ巡回 (スクレイピング) ではなく公式 API を用いるため安定・高速．
-- データ取得層 (`client/moodle_client.py`) は実装済みですが，**実トークンでの
-  動作確認は未実施**です (下記 `science-tokyo-lms-login` で取得後に検証してください)．
 
 ## 認証方針 (MFA 必須前提)
 
@@ -63,11 +61,12 @@ cp .env.example .env                 # 必要に応じて編集 (年度・ブラ
 
 | 変数 | 既定 | 説明 |
 |---|---|---|
-| `STLMS_LMS_BASE_URL` | `.../2025/` | Moodle のベース URL (年度ごとにパスが変わる) |
+| `STLMS_LMS_BASE_URL` | `.../2025/` | Moodle のベース URL (大学側のパス切替時のみ変更) |
 | `STLMS_BROWSER` | `chromium` | トークン取得に使うブラウザ (`chromium` / `firefox` / `webkit`) |
 | `STLMS_TOKEN_BACKEND` | `auto` | トークン保存方式 (`auto` / `keyring` / `file`) |
 | `STLMS_WSTOKEN` | (なし) | トークンを直接指定する場合 (最優先) |
 | `STLMS_AUTO_RELOGIN` | `true` | トークン失効時にヘッドレスで自動再ログインするか |
+| `STLMS_USER_AGENT` | (Chrome 風 UA) | WS / ファイル取得時の User-Agent (403 回避用) |
 
 > keyring (パスワードストア) が使えない環境では `STLMS_TOKEN_BACKEND=file` を指定すると，
 > トークンを `.auth/wstoken` (.gitignore 済み，パーミッション 0600) に保存します．
@@ -167,4 +166,4 @@ uv run pytest             # テスト
 
 - 認証情報・cookie・トークン・ダウンロード資料は **コミットしない** (`.gitignore` 済み)．
 - パスワードはコード・設定に保持せず，SSO は永続プロファイルに，トークンは keyring に委ねます．
-- リポジトリは **private 運用** を推奨します．
+- フォークや手元での管理時も，個人設定 (`.env`)・認証状態 (`.auth/`)・取得資料 (`downloads/`) をリポジトリに含めないでください．

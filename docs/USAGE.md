@@ -1,4 +1,4 @@
-# Science Tokyo LMS MCP 使い方ガイド (研究室メンバー向け)
+# Science Tokyo LMS MCP 使い方ガイド
 
 このドキュメントは，Science Tokyo LMS MCP サーバを **各自の PC に導入して使い始める**
 ための手順をまとめたものです．技術的な内部仕様はリポジトリ直下の `README.md` を参照してください．
@@ -89,8 +89,8 @@ uv --version
 リポジトリを取得したディレクトリで，順番に実行します．
 
 ```bash
-# 1) リポジトリを取得 (URL は研究室の共有先に置き換え)
-git clone <リポジトリの URL> ScienceTokyoLMS-mcp
+# 1) リポジトリを取得
+git clone https://github.com/kaeru333/ScienceTokyoLMS-mcp.git
 cd ScienceTokyoLMS-mcp
 
 # 2) 依存関係をインストール
@@ -239,21 +239,22 @@ Claude: (list_announcements を実行) → 直近のお知らせ一覧
 
 | 変数 | 既定 | 説明 |
 |---|---|---|
-| `STLMS_LMS_BASE_URL` | `https://lms.s.isct.ac.jp/2025/` | Moodle のベース URL．**年度ごとにパスが変わる** |
+| `STLMS_LMS_BASE_URL` | `https://lms.s.isct.ac.jp/2025/` | Moodle のベース URL (`https://lms.s.isct.ac.jp/` のリダイレクト先) |
 | `STLMS_BROWSER` | `chromium` | トークン取得に使うブラウザ (`chromium` / `firefox` / `webkit`) |
 | `STLMS_TOKEN_BACKEND` | `auto` | トークン保存方式 (`auto` / `keyring` / `file`) |
 | `STLMS_DOWNLOAD_DIR` | `downloads` | 講義資料の保存先 |
 | `STLMS_WSTOKEN` | (なし) | トークンを直接指定する場合 (最優先) |
 
-### 年度が変わったら
+### LMS の URL パスが切り替わったら
 
-新年度になったら `.env` の `STLMS_LMS_BASE_URL` の年度部分を書き換えてください．
+現時点では `https://lms.s.isct.ac.jp/` は `/2025/` へリダイレクトされるため，既定値のままで動作します．
+将来，大学側の運用でリダイレクト先のパスが切り替わった場合 (ブラウザで LMS を開いた際の URL が `/2026/` 等に変わった場合) のみ，`.env` の `STLMS_LMS_BASE_URL` を実際の URL に書き換えてください．
 
 ```bash
 STLMS_LMS_BASE_URL=https://lms.s.isct.ac.jp/2026/
 ```
 
-URL を変えるとトークンの保存キーも変わるため，**新しい年度で一度ログインし直す** 必要があります．
+URL を変えるとトークンの保存キーも変わるため，変更後は `uv run science-tokyo-lms-login` で **一度ログインし直す** 必要があります．
 
 ---
 
@@ -277,18 +278,17 @@ uv run science-tokyo-lms-mcp
 
 ---
 
-## 9. 研究室で共有するときの注意
+## 9. 他人に紹介・共有するときの注意
 
-- **共有してよいもの:** ソースコード一式 (リポジトリそのもの)．
+- **共有してよいもの:** ソースコード一式 (GitHub リポジトリの URL)．
 - **共有してはいけないもの:** 以下は各自の環境にだけ置き，絶対に共有しない．
   - `.env` (個人設定)
   - `.auth/` (ブラウザセッション・保存トークン)
   - `downloads/` (取得した講義資料)
   - keyring に保存されたトークン
-- 上記はいずれも `.gitignore` 済みですが，**zip で固めて配る・チャットに貼る** といった
-  経路で漏れないよう注意してください．
-- リポジトリは **private 運用** を推奨します．
-- 各メンバーは「3. セットアップ」「4. 初回ログイン」を **自分のアカウントで** 実行してください．
+- 上記はいずれも `.gitignore` 済みですが，**ローカルフォルダごと zip で固めて配る・チャットに貼る**
+  といった経路で漏れないよう注意してください．フォークする場合も機密ファイルを含めないこと．
+- 利用者ごとに「3. セットアップ」「4. 初回ログイン」を **自分のアカウントで** 実行してください．
   トークンの使い回しはしないこと．
 
 ---

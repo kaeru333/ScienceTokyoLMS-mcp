@@ -1,10 +1,12 @@
 """データモデルの単体テスト."""
 
 from datetime import datetime
+from importlib.metadata import version
 
 import pytest
 from pydantic import ValidationError
 
+import science_tokyo_lms_mcp
 from science_tokyo_lms_mcp.models import Assignment, Course, Material, MaterialKind
 
 
@@ -35,3 +37,8 @@ def test_assignment_with_due_date() -> None:
     due = datetime(2026, 7, 1, 23, 59)
     assignment = Assignment(id="a1", course_id="1", title="レポート1", due_at=due)
     assert assignment.due_at == due
+
+
+def test_package_version_matches_metadata() -> None:
+    assert science_tokyo_lms_mcp.__version__ == version("science-tokyo-lms-mcp")
+    assert science_tokyo_lms_mcp.__version__ == "0.1.0b2"
